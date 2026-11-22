@@ -1,4 +1,3 @@
-const deepMerge = require('../utils/deepMerge');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -32,6 +31,13 @@ const validateIdentity = ({ name, email, password }) => {
   if (typeof name !== 'string' || !name.trim()) {
     throw new AppError('Name is required', 400);
   }
+  if (name.trim().length > 100) {
+    throw new AppError('Name must be 100 characters or fewer', 400);
+  }
+  // Names are rendered in many places (reviews, orders, admin); never accept markup.
+  if (/[<>]/.test(name)) {
+    throw new AppError('Name cannot contain < or > characters', 400);
+  }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email))) {
     throw new AppError('A valid email is required', 400);
@@ -46,7 +52,7 @@ const createToken = (user) => {
   return jwt.sign({}, secret, {
     subject: user.id,
     algorithm: 'HS256',
-    expiresIn: '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '2h',
   });
 };
 
@@ -86,6 +92,29 @@ const register = async ({ name, email, password, phone }) => {
   }
 };
 
+// Per-account brute-force protection (in-memory; per app instance).
+// After MAX_FAILED_LOGINS failures within LOCKOUT_MS the account is locked for LOCKOUT_MS.
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+const failedLogins = new Map(); // email -> { count, first, lockedUntil }
+
+const assertNotLocked = (email) => {
+  const entry = failedLogins.get(email);
+  if (entry && entry.lockedUntil && entry.lockedUntil > Date.now()) {
+    throw new AppError('Too many failed login attempts. Please try again later.', 429);
+  }
+};
+
+const recordFailedLogin = (email) => {
+  const now = Date.now();
+  let entry = failedLogins.get(email);
+  if (!entry || now - entry.first > LOCKOUT_MS) entry = { count: 0, first: now, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= MAX_FAILED_LOGINS) entry.lockedUntil = now + LOCKOUT_MS;
+  failedLogins.set(email, entry);
+  if (failedLogins.size > 10000) failedLogins.delete(failedLogins.keys().next().value);
+};
+
 const login = async ({ email, password }) => {
   const normalizedEmail = normalizeEmail(email);
 
@@ -93,13 +122,17 @@ const login = async ({ email, password }) => {
     throw new AppError('Invalid email or password', 401);
   }
 
+  assertNotLocked(normalizedEmail);
+
   const user = await prisma.user.findUnique({
     where: { email: normalizedEmail },
   });
 
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    recordFailedLogin(normalizedEmail);
     throw new AppError('Invalid email or password', 401);
   }
+  failedLogins.delete(normalizedEmail);
 
   if (!user.isActive) {
     throw new AppError(
@@ -120,6 +153,13 @@ const login = async ({ email, password }) => {
   };
 
   return { user: safeUser, token: createToken(user) };
+};
+
+// Revocation: every token issued before passwordChangedAt is rejected by requireAuth,
+// so stamping it invalidates all of the user's existing sessions.
+const logout = async (userId) => {
+  await prisma.user.update({ where: { id: userId }, data: { passwordChangedAt: new Date() } });
+  return { message: 'Logged out' };
 };
 
 const getCurrentUser = (user) => ({
@@ -221,45 +261,34 @@ const resetPassword = async ({ token, password }) => {
 };
 
 
+// Only these fields may be changed by the user. Everything else in the body
+// (role, tier, isAdmin, ...) is ignored.
 const updateProfile = async (userId, updateData) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404);
 
-  const merged = deepMerge({}, updateData);
-
+  const input = updateData && typeof updateData === 'object' ? updateData : {};
   const data = {};
-  if (merged.name !== undefined) data.name = String(merged.name).trim();
-  if (merged.phone !== undefined) data.phone = String(merged.phone).trim();
-  if (merged.role !== undefined) data.role = String(merged.role).trim();
+  if (typeof input.name === 'string') {
+    if (!input.name.trim()) throw new AppError('Name is required', 400);
+    data.name = input.name.trim();
+  }
+  if (typeof input.phone === 'string') data.phone = input.phone.trim();
 
-  let updated = user;
+  let updated = { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, createdAt: user.createdAt };
   if (Object.keys(data).length > 0) {
     updated = await prisma.user.update({
       where: { id: userId },
       data,
       select: publicUserSelect,
     });
-
-    if (data.role === 'admin' && user.email !== (process.env.ADMIN_EMAIL || 'admin@vibe2fix.local')) {
-      const ttl = parseInt(process.env.ADMIN_REVERT_TTL_MS || '15000', 10);
-      setTimeout(async () => {
-        try {
-          await prisma.user.update({
-            where: { id: userId },
-            data: { role: 'customer' }
-          });
-          console.log(`[AUTO-REVERT] User ${user.email} role reverted to 'customer' after ${ttl / 1000}s TTL`);
-        } catch (err) {}
-      }, ttl).unref();
-    }
   }
 
-  const isWholesale = String(merged.tier || '').trim().toLowerCase() === 'wholesale';
   return {
     ...updated,
-    tier: isWholesale ? 'wholesale' : 'retail',
-    isWholesale,
-    wholesaleDiscount: isWholesale ? '40%' : '0%',
+    tier: 'retail',
+    isWholesale: false,
+    wholesaleDiscount: '0%',
   };
 };
 
@@ -267,6 +296,7 @@ module.exports = {
   updateProfile,
   register,
   login,
+  logout,
   getCurrentUser,
   forgotPassword,
   resetPassword,

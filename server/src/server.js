@@ -16,6 +16,20 @@ const app = express();
 
 // Trust reverse proxy (Railway, Vercel) for accurate client IP identification
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+// 0. Transport security. Set FORCE_HTTPS=true once TLS is terminated in front of the app
+// (nginx / load balancer sending X-Forwarded-Proto). Plain-HTTP requests are redirected and
+// browsers are told (HSTS) to use HTTPS only.
+if (process.env.FORCE_HTTPS === 'true') {
+  app.use((req, res, next) => {
+    if (req.secure || req.headers['x-forwarded-proto'] === 'https') return next();
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      return res.redirect(308, `https://${req.headers.host}${req.originalUrl}`);
+    }
+    return res.status(426).json({ message: 'HTTPS required' });
+  });
+}
 
 // 1. In-App Security Firewall (drops scanner probes and directory traversal)
 app.use(securityFirewall);
@@ -23,6 +37,7 @@ app.use(securityFirewall);
 // 2. Security Headers (Helmet)
 app.use(
   helmet({
+<<<<<<< HEAD
     contentSecurityPolicy: {
       useDefaults: false,
       directives: {
@@ -38,6 +53,10 @@ app.use(
         frameAncestors: ["'none'"],
       },
     },
+=======
+    contentSecurityPolicy: false,
+    hsts: process.env.FORCE_HTTPS === 'true' ? { maxAge: 31536000, includeSubDomains: true } : false,
+>>>>>>> origin/main
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
@@ -103,14 +122,11 @@ app.get('/', (req, res) => {
   }
   res.status(200).json({
     status: 'ok',
-    service: 'vibe2fix-backend',
-    health: '/api/health',
   });
 });
 
 app.get('/api/health', (req, res) => {
-  const diagnosticKey = process.env.DIAGNOSTIC_KEY || 'VIBE-DIAG-8831';
-  res.status(200).json({ status: 'ok', service: 'vibe2fix-backend', diagnosticKey });
+  res.status(200).json({ status: 'ok' });
 });
 
 // File Download Endpoint

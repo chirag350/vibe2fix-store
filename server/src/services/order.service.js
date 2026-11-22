@@ -9,6 +9,10 @@ async function placeOrder(userId, addressId, couponCode) {
     return await prisma.$transaction(async tx => {
       const cart = await tx.cart.findUnique({ where: { userId }, include: { coupon: true, items: { include: { product: { include: { images: { where: { isPrimary: true }, take: 1 } } } } } } });
       if (!cart || !cart.items.length) throw new AppError('Cart is empty', 400);
+      // Defence in depth: never trust stored quantities (e.g. rows created before validation existed).
+      if (cart.items.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1)) {
+        throw new AppError('Cart contains an invalid quantity', 400);
+      }
       const address = await tx.address.findFirst({ where: { id: addressId, userId } });
       if (!address) throw new AppError('Address not found for this user', 404);
       const subtotal = Number(cart.items.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0).toFixed(2));
@@ -22,6 +26,7 @@ async function placeOrder(userId, addressId, couponCode) {
         await new Promise((resolve) => setTimeout(resolve, 75));
       }
       const totals = cartTotals({ ...cart, coupon });
+      if (!(Number(totals.totalAmount) > 0)) throw new AppError('Order total must be greater than zero', 400);
       for (const item of cart.items) {
         const result = await tx.product.updateMany({
           where: { id: item.productId, isActive: true, stock: { gte: item.quantity } },
@@ -61,19 +66,16 @@ async function placeOrder(userId, addressId, couponCode) {
 }
 
 async function listOrders(userId, query = {}) {
-  const where = { ...query };
-  if (where.status) {
-    where.orderStatus = where.status;
-    delete where.status;
-  }
-  if (!where.userId && !where.user) {
-    where.userId = userId;
+  // Only the owner's orders are ever listed; the only client-controlled filter is `status`.
+  const where = { userId };
+  if (typeof query.status === 'string' && query.status) {
+    where.orderStatus = query.status;
   }
   return prisma.order.findMany({ where, include: { items: true, statusHistory: { orderBy: { changedAt: 'asc' } } }, orderBy: { createdAt: 'desc' } });
 }
 
 async function getOrder(userId, number) {
-  const order = await prisma.order.findFirst({ where: { orderNumber: number }, include: { items: true, statusHistory: { orderBy: { changedAt: 'asc' } } } });
+  const order = await prisma.order.findFirst({ where: { orderNumber: number, userId }, include: { items: true, statusHistory: { orderBy: { changedAt: 'asc' } } } });
   if (!order) throw new AppError('Order not found', 404);
   return order;
 }
