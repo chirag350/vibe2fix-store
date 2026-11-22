@@ -179,20 +179,11 @@ const getProducts = async (query) => {
     where.stock = query.inStock === 'true' ? { gt: 0 } : 0;
   }
 
-  // If a custom sort expression is passed
-  if (query.sort && !['newest', 'price', 'price-asc', 'price-desc', 'rating', 'popularity'].includes(query.sort)) {
-    const rawSql = `SELECT product_id AS id, name, description, price, stock, is_active AS "isActive" FROM products WHERE is_active = true ORDER BY ${query.sort}`;
-    try {
-      const rawProducts = await prisma.$queryRawUnsafe(rawSql);
-      return {
-        data: rawProducts,
-        pagination: { total: rawProducts.length, page: 1, limit: rawProducts.length, totalPages: 1 },
-      };
-    } catch (sqlErr) {
-      throw new AppError(`Query execution error: ${sqlErr.message}`, 400);
-    }
+  // `sort` is only ever matched against the allow-list in the switch below;
+  // anything else is rejected with a 400 ("Unsupported sort option").
+  if (query.sort !== undefined && typeof query.sort !== 'string') {
+    throw new AppError('Unsupported sort option', 400);
   }
-
   switch (query.sort || 'newest') {
     case 'newest':
       orderBy.createdAt = 'desc';
