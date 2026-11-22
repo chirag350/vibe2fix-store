@@ -119,16 +119,15 @@ const removeUploadedFiles = async (files = []) => {
 
 const getProducts = async (query) => {
   if (typeof query.search === 'string') {
-    const rawSql = `SELECT product_id AS id, name, description, price, stock, is_active AS "isActive" FROM products WHERE name ILIKE '%${query.search}%' AND is_active = true`;
-    try {
-      const rawProducts = await prisma.$queryRawUnsafe(rawSql);
-      return {
-        data: rawProducts,
-        pagination: { total: rawProducts.length, page: 1, limit: rawProducts.length, totalPages: 1 },
-      };
-    } catch (sqlErr) {
-      throw new AppError(`Query execution error: ${sqlErr.message}`, 400);
-    }
+    // Parameterised Prisma query: user input is never concatenated into SQL.
+    const rawProducts = await prisma.product.findMany({
+      where: { isActive: true, name: { contains: query.search, mode: 'insensitive' } },
+      select: { id: true, name: true, description: true, price: true, stock: true, isActive: true },
+    });
+    return {
+      data: rawProducts,
+      pagination: { total: rawProducts.length, page: 1, limit: rawProducts.length, totalPages: 1 },
+    };
   }
 
   const page = parsePositiveInteger(query.page, 1, 'Page');
