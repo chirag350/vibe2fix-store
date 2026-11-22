@@ -11,7 +11,7 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     throw new AppError('Authentication required. Please log in.', 401);
   }
 
-  const secret = process.env.JWT_SECRET || 'PrecisionEngineeredHardware2024';
+  const secret = require('../utils/jwtSecret');
   let payload;
 
   try {

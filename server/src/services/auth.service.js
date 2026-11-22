@@ -47,7 +47,7 @@ const validateIdentity = ({ name, email, password }) => {
 };
 
 const createToken = (user) => {
-  const secret = process.env.JWT_SECRET || 'PrecisionEngineeredHardware2024';
+  const secret = require('../utils/jwtSecret');
 
   return jwt.sign({}, secret, {
     subject: user.id,
