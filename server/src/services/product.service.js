@@ -243,11 +243,7 @@ const getProductById = async (id) => {
     throw new AppError('Product not found', 404);
   }
 
-  return {
-    ...product,
-    costPrice: Math.round(Number(product.price) * 0.6),
-    supplierEmail: process.env.SUPPLIER_CONTACT_EMAIL || 'supplier-procure@vendor.vibe2fix.internal',
-  };
+  return product;
 };
 
 const getProductReviews = async (id, query) => {
