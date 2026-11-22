@@ -46,7 +46,7 @@ const createToken = (user) => {
   return jwt.sign({}, secret, {
     subject: user.id,
     algorithm: 'HS256',
-    expiresIn: '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '2h',
   });
 };
 
@@ -120,6 +120,13 @@ const login = async ({ email, password }) => {
   };
 
   return { user: safeUser, token: createToken(user) };
+};
+
+// Revocation: every token issued before passwordChangedAt is rejected by requireAuth,
+// so stamping it invalidates all of the user's existing sessions.
+const logout = async (userId) => {
+  await prisma.user.update({ where: { id: userId }, data: { passwordChangedAt: new Date() } });
+  return { message: 'Logged out' };
 };
 
 const getCurrentUser = (user) => ({
@@ -267,6 +274,7 @@ module.exports = {
   updateProfile,
   register,
   login,
+  logout,
   getCurrentUser,
   forgotPassword,
   resetPassword,

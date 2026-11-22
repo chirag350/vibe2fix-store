@@ -10,6 +10,11 @@ const login = async (req, res) => {
   res.status(200).json({ data: result });
 };
 
+const logout = async (req, res) => {
+  const result = await authService.logout(req.user.id);
+  res.status(200).json({ data: result });
+};
+
 const me = async (req, res) => {
   res.status(200).json({ data: authService.getCurrentUser(req.user) });
 };
@@ -30,4 +35,4 @@ const updateProfile = async (req, res) => {
   res.status(200).json({ data: result });
 };
 
-module.exports = { register, login, me, forgotPassword, resetPassword, updateProfile };
+module.exports = { register, login, logout, me, forgotPassword, resetPassword, updateProfile };
