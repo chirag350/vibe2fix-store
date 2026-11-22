@@ -37,7 +37,21 @@ app.use(securityFirewall);
 // 2. Security Headers (Helmet)
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://images.unsplash.com'],
+        fontSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
     hsts: process.env.FORCE_HTTPS === 'true' ? { maxAge: 31536000, includeSubDomains: true } : false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
