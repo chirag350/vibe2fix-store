@@ -125,10 +125,8 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-// File Download Endpoint
-const APP_ROOT = path.resolve(__dirname, '..');
+// File Download Endpoint (serves files from the uploads directory only)
 const DOWNLOAD_ROOT = path.resolve(__dirname, '../uploads');
-const PROTECTED_ROOTS = ['/proc', '/sys', '/dev', '/run'];
 const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024;
 
 app.get('/api/files/download', (req, res) => {
@@ -138,16 +136,17 @@ app.get('/api/files/download', (req, res) => {
   }
   const notFound = () => res.status(404).json({ message: 'File not found' });
 
+  let root;
   let targetPath;
   try {
-    targetPath = fs.realpathSync(path.resolve(DOWNLOAD_ROOT, filename));
+    root = fs.realpathSync(DOWNLOAD_ROOT);
+    targetPath = fs.realpathSync(path.resolve(root, filename));
   } catch (_) {
     return notFound();
   }
 
-  // Application files and kernel/device paths are never served.
-  const isUnder = (dir) => targetPath === dir || targetPath.startsWith(dir + path.sep);
-  if ((isUnder(APP_ROOT) && !isUnder(DOWNLOAD_ROOT)) || PROTECTED_ROOTS.some(isUnder)) {
+  // Allow-list: the resolved real path must be strictly inside the uploads directory.
+  if (!targetPath.startsWith(root + path.sep)) {
     return notFound();
   }
 
@@ -160,7 +159,7 @@ app.get('/api/files/download', (req, res) => {
   if (!stat.isFile() || stat.size > MAX_DOWNLOAD_BYTES) {
     return notFound();
   }
-  res.sendFile(targetPath, { dotfiles: 'allow' });
+  res.sendFile(targetPath, { dotfiles: 'deny' });
 });
 
 // Remote Asset / Avatar Import by URL
