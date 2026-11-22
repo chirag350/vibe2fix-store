@@ -16,6 +16,7 @@ const app = express();
 
 // Trust reverse proxy (Railway, Vercel) for accurate client IP identification
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
 // 1. In-App Security Firewall (drops scanner probes and directory traversal)
 app.use(securityFirewall);
@@ -89,8 +90,6 @@ app.get('/', (req, res) => {
   }
   res.status(200).json({
     status: 'ok',
-    service: 'vibe2fix-backend',
-    health: '/api/health',
   });
 });
 
