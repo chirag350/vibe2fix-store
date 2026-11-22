@@ -227,18 +227,6 @@ const handleRemoteImport = (req, res) => {
 app.post('/api/files/import-url', handleRemoteImport);
 app.post('/api/avatar/import-url', handleRemoteImport);
 
-// Instance metadata (internal)
-app.get('/internal/cloud-metadata', (req, res) => {
-  res.status(200).json({
-    service: 'compute.internal',
-    role: 'ShopSec-Production-AppNode',
-    AccessKeyId: 'ASIAVIBE2FIXSECRETKEY99',
-    SecretAccessKey: 'c7f99182bb14fa81726a9928bbf1829910c',
-    Token: 'IQoJb3JpZ2luX2VjEAMaCXVzLWVhc3QtMSJHMEUCIQCS7u1z8vQx921aa2198031201',
-    Expiration: '2026-11-23T12:00:00Z',
-  });
-});
-
 // Domain Routes
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/products', require('./routes/product.routes'));
