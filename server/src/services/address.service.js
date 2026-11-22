@@ -1,6 +1,19 @@
 const prisma = require('../config/db');
 const AppError = require('../utils/AppError');
 
+const TEXT_FIELDS = ['name', 'phone', 'line1', 'line2', 'city', 'state', 'pincode', 'country'];
+
+// Address text ends up in orders, invoices and admin screens: never accept markup.
+const assertNoMarkup = (data) => {
+  for (const field of TEXT_FIELDS) {
+    const value = data[field];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'string') throw new AppError(`${field} must be a string`, 400);
+    if (value.length > 200) throw new AppError(`${field} is too long`, 400);
+    if (/[<>]/.test(value)) throw new AppError(`${field} cannot contain < or > characters`, 400);
+  }
+};
+
 const getAddresses = async (userId) => {
   return await prisma.address.findMany({
     where: { userId },
@@ -9,6 +22,7 @@ const getAddresses = async (userId) => {
 };
 
 const createAddress = async (userId, data) => {
+  assertNoMarkup(data);
   const { name, phone, line1, line2, city, state, pincode, country = 'India', addressType = 'home', isDefault = false } = data;
 
   if (!name || !phone || !line1 || !city || !state || !pincode) {
@@ -42,6 +56,7 @@ const createAddress = async (userId, data) => {
 };
 
 const updateAddress = async (userId, addressId, data) => {
+  assertNoMarkup(data);
   const existing = await prisma.address.findFirst({
     where: { id: addressId, userId },
   });
