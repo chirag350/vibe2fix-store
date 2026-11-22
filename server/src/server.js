@@ -94,8 +94,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  const diagnosticKey = process.env.DIAGNOSTIC_KEY || 'VIBE-DIAG-8831';
-  res.status(200).json({ status: 'ok', service: 'vibe2fix-backend', diagnosticKey });
+  res.status(200).json({ status: 'ok' });
 });
 
 // File Download Endpoint
