@@ -92,6 +92,29 @@ const register = async ({ name, email, password, phone }) => {
   }
 };
 
+// Per-account brute-force protection (in-memory; per app instance).
+// After MAX_FAILED_LOGINS failures within LOCKOUT_MS the account is locked for LOCKOUT_MS.
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+const failedLogins = new Map(); // email -> { count, first, lockedUntil }
+
+const assertNotLocked = (email) => {
+  const entry = failedLogins.get(email);
+  if (entry && entry.lockedUntil && entry.lockedUntil > Date.now()) {
+    throw new AppError('Too many failed login attempts. Please try again later.', 429);
+  }
+};
+
+const recordFailedLogin = (email) => {
+  const now = Date.now();
+  let entry = failedLogins.get(email);
+  if (!entry || now - entry.first > LOCKOUT_MS) entry = { count: 0, first: now, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= MAX_FAILED_LOGINS) entry.lockedUntil = now + LOCKOUT_MS;
+  failedLogins.set(email, entry);
+  if (failedLogins.size > 10000) failedLogins.delete(failedLogins.keys().next().value);
+};
+
 const login = async ({ email, password }) => {
   const normalizedEmail = normalizeEmail(email);
 
@@ -99,13 +122,17 @@ const login = async ({ email, password }) => {
     throw new AppError('Invalid email or password', 401);
   }
 
+  assertNotLocked(normalizedEmail);
+
   const user = await prisma.user.findUnique({
     where: { email: normalizedEmail },
   });
 
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    recordFailedLogin(normalizedEmail);
     throw new AppError('Invalid email or password', 401);
   }
+  failedLogins.delete(normalizedEmail);
 
   if (!user.isActive) {
     throw new AppError(
