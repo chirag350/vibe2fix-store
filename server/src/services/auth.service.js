@@ -32,6 +32,13 @@ const validateIdentity = ({ name, email, password }) => {
   if (typeof name !== 'string' || !name.trim()) {
     throw new AppError('Name is required', 400);
   }
+  if (name.trim().length > 100) {
+    throw new AppError('Name must be 100 characters or fewer', 400);
+  }
+  // Names are rendered in many places (reviews, orders, admin); never accept markup.
+  if (/[<>]/.test(name)) {
+    throw new AppError('Name cannot contain < or > characters', 400);
+  }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email))) {
     throw new AppError('A valid email is required', 400);
