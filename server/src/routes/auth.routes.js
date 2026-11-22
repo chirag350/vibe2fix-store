@@ -9,7 +9,7 @@ const router = express.Router();
 // OWASP A04: Rate limiting on authentication and sensitive endpoints
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Generous limit for shared networks
+  max: 30, // Per IP; per-account lockout is enforced in auth.service
   message: { message: 'Too many login attempts. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
