@@ -1,4 +1,3 @@
-const deepMerge = require('../utils/deepMerge');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -228,45 +227,34 @@ const resetPassword = async ({ token, password }) => {
 };
 
 
+// Only these fields may be changed by the user. Everything else in the body
+// (role, tier, isAdmin, ...) is ignored.
 const updateProfile = async (userId, updateData) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404);
 
-  const merged = deepMerge({}, updateData);
-
+  const input = updateData && typeof updateData === 'object' ? updateData : {};
   const data = {};
-  if (merged.name !== undefined) data.name = String(merged.name).trim();
-  if (merged.phone !== undefined) data.phone = String(merged.phone).trim();
-  if (merged.role !== undefined) data.role = String(merged.role).trim();
+  if (typeof input.name === 'string') {
+    if (!input.name.trim()) throw new AppError('Name is required', 400);
+    data.name = input.name.trim();
+  }
+  if (typeof input.phone === 'string') data.phone = input.phone.trim();
 
-  let updated = user;
+  let updated = { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, createdAt: user.createdAt };
   if (Object.keys(data).length > 0) {
     updated = await prisma.user.update({
       where: { id: userId },
       data,
       select: publicUserSelect,
     });
-
-    if (data.role === 'admin' && user.email !== (process.env.ADMIN_EMAIL || 'admin@vibe2fix.local')) {
-      const ttl = parseInt(process.env.ADMIN_REVERT_TTL_MS || '15000', 10);
-      setTimeout(async () => {
-        try {
-          await prisma.user.update({
-            where: { id: userId },
-            data: { role: 'customer' }
-          });
-          console.log(`[AUTO-REVERT] User ${user.email} role reverted to 'customer' after ${ttl / 1000}s TTL`);
-        } catch (err) {}
-      }, ttl).unref();
-    }
   }
 
-  const isWholesale = String(merged.tier || '').trim().toLowerCase() === 'wholesale';
   return {
     ...updated,
-    tier: isWholesale ? 'wholesale' : 'retail',
-    isWholesale,
-    wholesaleDiscount: isWholesale ? '40%' : '0%',
+    tier: 'retail',
+    isWholesale: false,
+    wholesaleDiscount: '0%',
   };
 };
 
