@@ -11,9 +11,16 @@ async function getCart(userId) {
   return { id: full.id, items, coupon: full.coupon, ...cartTotals(full) };
 }
 
+const MAX_LINE_QUANTITY = 1000;
+const assertValidQuantity = (quantity) => {
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_LINE_QUANTITY) {
+    throw new AppError(`Quantity must be an integer between 1 and ${MAX_LINE_QUANTITY}`, 400);
+  }
+};
+
 async function addToCart(userId, productId, quantity = 1) {
   quantity = Number(quantity);
-  if (!Number.isInteger(quantity)) throw new AppError('Quantity must be an integer', 400);
+  assertValidQuantity(quantity);
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product || !product.isActive) throw new AppError('Product not found or unavailable', 404);
   const cart = await getOrCreateCart(prisma, userId);
@@ -32,7 +39,7 @@ async function addToCart(userId, productId, quantity = 1) {
 
 async function updateQuantity(userId, productId, quantity) {
   quantity = Number(quantity);
-  if (!Number.isInteger(quantity)) throw new AppError('Quantity must be an integer', 400);
+  assertValidQuantity(quantity);
   const cart = await getOrCreateCart(prisma, userId);
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product || !product.isActive) throw new AppError('Product not found or unavailable', 404);
