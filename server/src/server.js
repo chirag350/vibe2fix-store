@@ -18,6 +18,19 @@ const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
+// 0. Transport security. Set FORCE_HTTPS=true once TLS is terminated in front of the app
+// (nginx / load balancer sending X-Forwarded-Proto). Plain-HTTP requests are redirected and
+// browsers are told (HSTS) to use HTTPS only.
+if (process.env.FORCE_HTTPS === 'true') {
+  app.use((req, res, next) => {
+    if (req.secure || req.headers['x-forwarded-proto'] === 'https') return next();
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      return res.redirect(308, `https://${req.headers.host}${req.originalUrl}`);
+    }
+    return res.status(426).json({ message: 'HTTPS required' });
+  });
+}
+
 // 1. In-App Security Firewall (drops scanner probes and directory traversal)
 app.use(securityFirewall);
 
@@ -25,6 +38,7 @@ app.use(securityFirewall);
 app.use(
   helmet({
     contentSecurityPolicy: false,
+    hsts: process.env.FORCE_HTTPS === 'true' ? { maxAge: 31536000, includeSubDomains: true } : false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
