@@ -28,6 +28,11 @@ const recalculateProductRating = async (productId, tx = prisma) => {
   });
 };
 
+// Reviews are shown to every shopper: strip any HTML tags before storing.
+// (A bare "<3" or "a < b" is preserved; only tag-like sequences are removed.)
+const cleanComment = (comment) =>
+  String(comment).replace(/<\/?[a-zA-Z!][^>]*>?/g, '').trim();
+
 /**
  * Post a new verified review
  */
@@ -37,9 +42,13 @@ const createReview = async ({ productId, userId, rating, comment, files = [] }) 
     throw new AppError('Rating must be an integer between 1 and 5', 400);
   }
 
-  if (!comment || comment.trim().length === 0) {
+  if (typeof comment !== 'string' || cleanComment(comment).length === 0) {
     throw new AppError('Review comment is required', 400);
   }
+  if (comment.length > 2000) {
+    throw new AppError('Review comment is too long', 400);
+  }
+  comment = cleanComment(comment);
 
   // 1. Check if user already reviewed this product (upsert)
   const existingReview = await prisma.review.findUnique({
@@ -163,7 +172,9 @@ const updateReview = async ({ reviewId, userId, rating, comment }) => {
   }
 
   if (comment !== undefined) {
-    if (comment.trim().length === 0) {
+    if (typeof comment !== 'string') throw new AppError('Review comment must be text', 400);
+    comment = cleanComment(comment);
+    if (comment.length === 0) {
       throw new AppError('Comment cannot be empty', 400);
     }
     data.comment = comment.trim();
