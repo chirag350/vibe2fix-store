@@ -66,19 +66,16 @@ async function placeOrder(userId, addressId, couponCode) {
 }
 
 async function listOrders(userId, query = {}) {
-  const where = { ...query };
-  if (where.status) {
-    where.orderStatus = where.status;
-    delete where.status;
-  }
-  if (!where.userId && !where.user) {
-    where.userId = userId;
+  // Only the owner's orders are ever listed; the only client-controlled filter is `status`.
+  const where = { userId };
+  if (typeof query.status === 'string' && query.status) {
+    where.orderStatus = query.status;
   }
   return prisma.order.findMany({ where, include: { items: true, statusHistory: { orderBy: { changedAt: 'asc' } } }, orderBy: { createdAt: 'desc' } });
 }
 
 async function getOrder(userId, number) {
-  const order = await prisma.order.findFirst({ where: { orderNumber: number }, include: { items: true, statusHistory: { orderBy: { changedAt: 'asc' } } } });
+  const order = await prisma.order.findFirst({ where: { orderNumber: number, userId }, include: { items: true, statusHistory: { orderBy: { changedAt: 'asc' } } } });
   if (!order) throw new AppError('Order not found', 404);
   return order;
 }
