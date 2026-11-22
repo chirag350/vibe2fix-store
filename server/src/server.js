@@ -37,7 +37,6 @@ app.use(securityFirewall);
 // 2. Security Headers (Helmet)
 app.use(
   helmet({
-<<<<<<< HEAD
     contentSecurityPolicy: {
       useDefaults: false,
       directives: {
@@ -53,10 +52,7 @@ app.use(
         frameAncestors: ["'none'"],
       },
     },
-=======
-    contentSecurityPolicy: false,
     hsts: process.env.FORCE_HTTPS === 'true' ? { maxAge: 31536000, includeSubDomains: true } : false,
->>>>>>> origin/main
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
