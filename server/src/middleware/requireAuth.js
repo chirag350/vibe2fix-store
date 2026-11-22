@@ -65,7 +65,7 @@ const requireAuth = asyncHandler(async (req, res, next) => {
   if (
     user.passwordChangedAt &&
     payload.iat &&
-    Math.floor(user.passwordChangedAt.getTime() / 1000) > payload.iat
+    Math.floor(user.passwordChangedAt.getTime() / 1000) >= payload.iat
   ) {
     throw new AppError('Password recently changed. Please log in again.', 401);
   }
