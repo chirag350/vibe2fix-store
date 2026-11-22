@@ -271,9 +271,14 @@ const updateProfile = async (userId, updateData) => {
   const data = {};
   if (typeof input.name === 'string') {
     if (!input.name.trim()) throw new AppError('Name is required', 400);
+    if (input.name.trim().length > 100) throw new AppError('Name must be 100 characters or fewer', 400);
+    if (/[<>]/.test(input.name)) throw new AppError('Name cannot contain < or > characters', 400);
     data.name = input.name.trim();
   }
-  if (typeof input.phone === 'string') data.phone = input.phone.trim();
+  if (typeof input.phone === 'string') {
+    if (input.phone.length > 30 || /[<>]/.test(input.phone)) throw new AppError('Invalid phone number', 400);
+    data.phone = input.phone.trim();
+  }
 
   let updated = { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, createdAt: user.createdAt };
   if (Object.keys(data).length > 0) {
